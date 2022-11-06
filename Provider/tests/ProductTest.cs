@@ -57,7 +57,6 @@ namespace Provider.Tests
                 .ServiceProvider("ProductService", new Uri(pactServiceUri))
                 .WithFileSource(pactFile)
                 .WithProviderStateUrl(new Uri($"{pactServiceUri}/provider-states"))
-                // .HonoursPactWith("ApiClient")
                 .Verify();
         }
     }
