@@ -230,65 +230,68 @@ The consumer can define the state of an interaction using the `given` property.
 Note how similar it looks to a unit test:
 
 ```csharp
-using System.IO;
-using PactNet;
-using PactNet.Native;
-using Xunit.Abstractions;
-using Xunit;
-using System.Net.Http;
-using System.Net;
 using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Net.Http;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
-using Consumer;
+using PactNet;
+using PactNet.Infrastructure.Outputters;
 using PactNet.Matchers;
+using Xunit;
+using Xunit.Abstractions;
 
-namespace tests
+namespace Consumer.Tests
 {
     public class ApiTest
     {
-        private IPactBuilderV3 pact;
-        private readonly ApiClient ApiClient;
-        private readonly int port = 9000;
+        private const int Port = 9000;
+
+        private readonly IPactBuilderV3 pactBuilder;
+        private readonly ApiClient apiClient;
         private readonly List<object> products;
 
         public ApiTest(ITestOutputHelper output)
         {
-            products = new List<object>()
+            this.products = new List<object>()
             {
                 new { id = 9, type = "CREDIT_CARD", name = "GEM Visa", version = "v2" },
                 new { id = 10, type = "CREDIT_CARD", name = "28 Degrees", version = "v1" }
             };
 
-            var Config = new PactConfig
+            var config = new PactConfig
             {
                 PactDir = Path.Join("..", "..", "..", "..", "..", "pacts"),
-                LogDir = "pact_logs",
-                Outputters = new[] { new XUnitOutput(output) },
+                Outputters = new IOutput[] { new XUnitOutput(output) },
                 DefaultJsonSettings = new JsonSerializerSettings
                 {
                     ContractResolver = new CamelCasePropertyNamesContractResolver()
                 }
             };
 
-            pact = Pact.V3("ApiClient", "ProductService", Config).UsingNativeBackend(port);
-            ApiClient = new ApiClient(new System.Uri($"http://localhost:{port}"));
+            var pact = Pact.V3("ApiClient", "ProductService", config);
+
+            this.pactBuilder = pact.WithHttpInteractions(Port);
+
+            this.apiClient = new ApiClient(new System.Uri($"http://localhost:{Port}"));
         }
 
         [Fact]
         public async void GetAllProducts()
         {
             // Arange
-            pact.UponReceiving("A valid request for all products")
-                    .Given("There is data")
-                    .WithRequest(HttpMethod.Get, "/api/products")
+            this.pactBuilder.UponReceiving("A valid request for all products")
+                .Given("products exist")
+                .WithRequest(HttpMethod.Get, "/api/products")
                 .WillRespond()
-                    .WithStatus(HttpStatusCode.OK)
-                    .WithHeader("Content-Type", "application/json; charset=utf-8")
-                    .WithJsonBody(new TypeMatcher(products));
+                .WithStatus(HttpStatusCode.OK)
+                .WithHeader("Content-Type", "application/json; charset=utf-8")
+                .WithJsonBody(new TypeMatcher(this.products));
 
-            await pact.VerifyAsync(async ctx => {
-                var response = await ApiClient.GetAllProducts();
+            await this.pactBuilder.VerifyAsync(async ctx =>
+            {
+                var response = await this.apiClient.GetAllProducts();
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             });
         }
@@ -297,21 +300,22 @@ namespace tests
         public async void GetProduct()
         {
             // Arange
-            pact.UponReceiving("A valid request for a product")
-                    .Given("There is data")
-                    .WithRequest(HttpMethod.Get, "/api/product/10")
+            this.pactBuilder.UponReceiving("A valid request for a product")
+                .Given("product with ID 10 exists")
+                .WithRequest(HttpMethod.Get, "/api/products/10")
                 .WillRespond()
-                    .WithStatus(HttpStatusCode.OK)
-                    .WithHeader("Content-Type", "application/json; charset=utf-8")
-                    .WithJsonBody(new TypeMatcher(products[1]));
+                .WithStatus(HttpStatusCode.OK)
+                .WithHeader("Content-Type", "application/json; charset=utf-8")
+                .WithJsonBody(new TypeMatcher(this.products[1]));
 
-            await pact.VerifyAsync(async ctx => {
-                var response = await ApiClient.GetProduct(10);
+            await this.pactBuilder.VerifyAsync(async ctx =>
+            {
+                var response = await this.apiClient.GetProduct(10);
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             });
         }
     }
-
+}
 ```
 
 ![Test using Pact](diagrams/workshop_step3_pact.svg)
@@ -322,18 +326,18 @@ Running this test still passes, but it creates a pact file which we can use to v
 
 ```console
 $ dotnet test
-  Determining projects to restore...
+    Determining projects to restore...
   All projects are up-to-date for restore.
-  consumer -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/src/bin/Debug/netcoreapp3.1/consumer.dll
-  tests -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll
-Test run for /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll (.NETCoreApp,Version=v3.1)
-Microsoft (R) Test Execution Command Line Tool Version 16.11.0
+  Provider -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\src\bin\Debug\net6.0\Provider.dll
+  Provider.Tests -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\bin\Debug\net6.0\Provider.Tests.dll
+Test run for C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\bin\Debug\net6.0\Provider.Tests.dll (.NETCoreApp,Version=v6.0)
+Microsoft (R) Test Execution Command Line Tool Version 17.3.1 (x64)
 Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
 
-Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 12 ms - /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll (netcoreapp3.1)
+Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1, Duration: < 1 ms - Provider.Tests.dll (net6.0)
 ```
 
 A pact file should have been generated in *pacts/ApiClient-ProductService.json*
@@ -352,23 +356,23 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
-using PactNet;
 using PactNet.Infrastructure.Outputters;
-using PactNet.Native;
-using tests.XUnitHelpers;
+using PactNet.Verifier;
+using Provider.Tests.XUnitHelpers;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace tests
+namespace Provider.Tests
 {
     public class ProductTest
     {
-        private string _pactServiceUri = "http://127.0.0.1:9001";
-        private ITestOutputHelper _outputHelper { get; }
+        private const string PactServiceUri = "http://127.0.0.1:9001";
+
+        private ITestOutputHelper OutputHelper { get; }
 
         public ProductTest(ITestOutputHelper output)
         {
-            _outputHelper = output;
+            this.OutputHelper = output;
         }
 
         [Fact]
@@ -381,23 +385,29 @@ namespace tests
                 // so a custom outputter is required.
                 Outputters = new List<IOutput>
                 {
-                    new XUnitOutput(_outputHelper)
+                    new XUnitOutput(this.OutputHelper)
                 }
             };
 
-            using (var _webHost = WebHost.CreateDefaultBuilder().UseStartup<TestStartup>().UseUrls(_pactServiceUri).Build())
-            {
-                _webHost.Start();
+            using var webHost = WebHost.CreateDefaultBuilder()
+                .UseStartup<TestStartup>()
+                .UseUrls(PactServiceUri)
+                .Build();
 
-                //Act / Assert
-                IPactVerifier pactVerifier = new PactVerifier(config);
-                var pactFile = new FileInfo(Path.Join("..", "..", "..", "..", "..", "pacts", "ApiClient-ProductService.json"));
-                pactVerifier.FromPactFile(pactFile)
-                    .WithProviderStateUrl(new Uri($"{_pactServiceUri}/provider-states"))
-                    .ServiceProvider("ProductService", new Uri(_pactServiceUri))
-                    .HonoursPactWith("ApiClient")
-                    .Verify();
-            }
+            webHost.Start();
+
+
+            //Act / Assert
+            IPactVerifier pactVerifier = new PactVerifier(config);
+
+            var pactFile = new FileInfo(Path.Join("..", "..", "..", "..", "..", "pacts",
+                "ApiClient-ProductService.json"));
+
+            pactVerifier
+                .ServiceProvider("ProductService", new Uri(PactServiceUri))
+                .WithFileSource(pactFile)
+                .WithProviderStateUrl(new Uri($"{PactServiceUri}/provider-states"))
+                .Verify();
         }
     }
 }
@@ -406,30 +416,44 @@ namespace tests
 We now need to validate the pact generated by the consumer is valid, by executing it against the running service provider, which should fail:
 
 ```console
-[1] $ dotnet test                                                                                                                                                                                                  ✘
-  Determining projects to restore...
-  Restored /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/src/provider.csproj (in 58 ms).
-  Restored /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/tests.csproj (in 240 ms).
-  Restored /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/src/provider.csproj (in 530 ms).
-  provider -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/src/bin/Debug/netcoreapp3.1/provider.dll
-  tests -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll
-Test run for /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll (.NETCoreApp,Version=v5.0)
-Microsoft (R) Test Execution Command Line Tool Version 16.11.0
+[1] $ dotnet test                                                                                                                         ✘
+ Determining projects to restore...
+  All projects are up-to-date for restore.
+  Provider -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\src\bin\Debug\net6.0\Provider.dll
+  Provider.Tests -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\bin\Debug\net6.0\Provider.Tests.dll
+Test run for C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\bin\Debug\net6.0\Provider.Tests.dll (.NETCoreApp,Version=v6.0)
+Microsoft (R) Test Execution Command Line Tool Version 17.3.1 (x64)
 Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:01.37]     Provider.Tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer [FAIL]
+  Failed Provider.Tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer [301 ms]
+  Error Message:
+   PactNet.Exceptions.PactFailureException : Pact verification failed
+  Stack Trace:
+     at PactNet.Verifier.InteropVerifierProvider.Execute()
+   at PactNet.Verifier.PactVerifierSource.Verify()
+   at Provider.Tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer() in C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\ProductTest.cs:line 53
+  Standard Output Messages:
+ Starting verification...
+ Pact verification failed
+
+ Verifier Output
+ ---------------
 
 Verifying a pact between ApiClient and ProductService
-  Given product with ID 10 exists
-  Given products exist
+
   A valid request for a product
+     Given product with ID 10 exists
     returns a response which
       has status code 200 (FAILED)
       includes headers
         "Content-Type" with value "application/json; charset=utf-8" (FAILED)
       has a matching body (FAILED)
+
   A valid request for all products
+     Given products exist
     returns a response which
       has status code 200 (OK)
       includes headers
@@ -439,7 +463,7 @@ Verifying a pact between ApiClient and ProductService
 
 Failures:
 
-1) Verifying a pact between ApiClient and ProductService Given product with ID 10 exists - A valid request for a product returns a response which
+1) Verifying a pact between ApiClient and ProductService Given product with ID 10 exists - A valid request for a product
     1.1) has a matching body
            / -> Expected body Present(65 bytes) but was empty
     1.2) has status code 200
@@ -449,34 +473,27 @@ Failures:
 
 There were 1 pact failures
 
-[xUnit.net 00:00:00.93]     tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer [FAIL]
-  Failed tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer [358 ms]
-  Error Message:
-   PactNet.PactFailureException : The verification process failed, see output for errors
-  Stack Trace:
-     at PactNet.Native.NativePactVerifier.Verify(String args) in /Users/erikdanielsen/work/dius/pact-net/src/PactNet.Native/NativePactVerifier.cs:line 34
-   at PactNet.Native.PactVerifier.Verify() in /Users/erikdanielsen/work/dius/pact-net/src/PactNet.Native/PactVerifier.cs:line 240
-   at tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer() in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/ProductTest.cs:line 46
-  Standard Output Messages:
- Invoking the pact verifier with args:
- --file
- /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/pacts/ApiClient-ProductService.json
- --state-change-url
- http://127.0.0.1:9001/provider-states
- --provider-name
- ProductService
- --hostname
- 127.0.0.1
- --port
- 9001
- --filter-consumer
- ApiClient
- --loglevel
- trace
+ Verifier Logs
+ -------------
+ 2022-11-06T09:36:39.922262Z  INFO ThreadId(21) pact_verifier: Running setup provider state change handler 'product with ID 10 exists' for 'A valid request for a product'
+2022-11-06T09:36:39.947078Z  INFO ThreadId(21) pact_verifier: Running provider verification for 'A valid request for a product'
+2022-11-06T09:36:39.947143Z  INFO ThreadId(21) pact_verifier::provider_client: Sending request to provider at http://127.0.0.1:9001/
+2022-11-06T09:36:39.947149Z  INFO ThreadId(21) pact_verifier::provider_client: Sending request HTTP Request ( method: GET, path: /api/product/10, query: None, headers: None, body: Missing )
+2022-11-06T09:36:39.966764Z  INFO ThreadId(21) pact_verifier::provider_client: Received response: HTTP Response ( status: 404, headers: Some({"server": ["Kestrel"], "date": ["Sun", "06 Nov 2022 09:36:39 GMT"], "content-length": ["0"]}), body: Empty )
+2022-11-06T09:36:39.966796Z  INFO ThreadId(21) pact_matching: comparing to expected response: HTTP Response ( status: 200, headers: Some({"Content-Type": ["application/json; charset=utf-8"]}), body: Present(65 bytes) )
+2022-11-06T09:36:39.969783Z  INFO ThreadId(21) pact_verifier: Running setup provider state change handler 'products exist' for 'A valid request for all products'
+2022-11-06T09:36:39.973750Z  INFO ThreadId(21) pact_verifier: Running provider verification for 'A valid request for all products'
+2022-11-06T09:36:39.973780Z  INFO ThreadId(21) pact_verifier::provider_client: Sending request to provider at http://127.0.0.1:9001/
+2022-11-06T09:36:39.973781Z  INFO ThreadId(21) pact_verifier::provider_client: Sending request HTTP Request ( method: GET, path: /api/products, query: None, headers: None, body: Missing )
+2022-11-06T09:36:39.988545Z  INFO ThreadId(21) pact_verifier::provider_client: Received response: HTTP Response ( status: 200, headers: Some({"content-type": ["application/json; charset=utf-8"], "date": ["Sun", "06 Nov 2022 09:36:39 GMT"], "server": ["Kestrel"], "transfer-encoding": ["chunked"]}), body: Present(204 bytes, application/json;charset=utf-8) )
+2022-11-06T09:36:39.988571Z  INFO ThreadId(21) pact_matching: comparing to expected response: HTTP Response ( status: 200, headers: Some({"Content-Type": ["application/json; charset=utf-8"]}), body: Present(130 bytes) )
+2022-11-06T09:36:39.989069Z  WARN ThreadId(21) pact_matching::metrics:
+
+Please note:
+We are tracking events anonymously to gather important usage statistics like Pact version and operating system. To disable tracking, set the 'PACT_DO_NOT_TRACK' environment variable to 'true'.
 
 
-
-Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: < 1 ms - /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll (net5.0)
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: < 1 ms - Provider.Tests.dll (net6.0)
 ```
 
 ![Pact Verification](diagrams/workshop_step4_pact.svg)
@@ -520,16 +537,17 @@ In `Consumer/tests/ApiTest.cs`:
 public async void GetProduct()
 {
     // Arange
-    pact.UponReceiving("A valid request for a product")
-            .Given("There is data")
-            .WithRequest(HttpMethod.Get, "/api/products/10")
+    this.pactBuilder.UponReceiving("A valid request for a product")
+        .Given("product with ID 10 exists")
+        .WithRequest(HttpMethod.Get, "/api/products/10")
         .WillRespond()
-            .WithStatus(HttpStatusCode.OK)
-            .WithHeader("Content-Type", "application/json; charset=utf-8")
-            .WithJsonBody(products[1]);
+        .WithStatus(HttpStatusCode.OK)
+        .WithHeader("Content-Type", "application/json; charset=utf-8")
+        .WithJsonBody(new TypeMatcher(this.products[1]));
 
-    await pact.VerifyAsync(async ctx => {
-        var response = await ApiClient.GetProduct(10);
+    await this.pactBuilder.VerifyAsync(async ctx =>
+    {
+        var response = await this.apiClient.GetProduct(10);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     });
 }
@@ -541,18 +559,18 @@ Let's run and generate an updated pact file on the client:
 
 ```console
 $ dotnet test
-  Determining projects to restore...
+    Determining projects to restore...
   All projects are up-to-date for restore.
-  consumer -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/src/bin/Debug/netcoreapp3.1/consumer.dll
-  tests -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll
-Test run for /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll (.NETCoreApp,Version=v3.1)
-Microsoft (R) Test Execution Command Line Tool Version 16.11.0
+  Consumer -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\src\bin\Debug\net6.0\Consumer.dll
+  Consumer.Tests -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\tests\bin\Debug\net6.0\Consumer.Tests.dll
+Test run for C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\tests\bin\Debug\net6.0\Consumer.Tests.dll (.NETCoreApp,Version=v6.0)
+Microsoft (R) Test Execution Command Line Tool Version 17.3.1 (x64)
 Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
 
-Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 12 ms - /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll (netcoreapp3.1)
+Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 2 s - Consumer.Tests.dll (net6.0)
 ```
 
 Now we run the provider tests again with the updated contract
@@ -562,37 +580,17 @@ Run thse command under `Consumer/tests`:
 ```console
 [1] $ dotnet test                                                                                                                                                                   ✘
   Determining projects to restore...
-  Restored /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/src/provider.csproj (in 53 ms).
-  Restored /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/tests.csproj (in 225 ms).
-  Restored /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/src/provider.csproj (in 524 ms).
-  provider -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/src/bin/Debug/netcoreapp3.1/provider.dll
-  tests -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll
-Test run for /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll (.NETCoreApp,Version=v5.0)
-Microsoft (R) Test Execution Command Line Tool Version 16.11.0
+  All projects are up-to-date for restore.
+  Provider -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\src\bin\Debug\net6.0\Provider.dll
+  Provider.Tests -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\bin\Debug\net6.0\Provider.Tests.dll
+Test run for C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\bin\Debug\net6.0\Provider.Tests.dll (.NETCoreApp,Version=v6.0)
+Microsoft (R) Test Execution Command Line Tool Version 17.3.1 (x64)
 Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
 
-Verifying a pact between ApiClient and ProductService
-  Given There is data
-  Given There is data
-  A valid request for a product
-    returns a response which
-      has status code 200 (OK)
-      includes headers
-        "Content-Type" with value "application/json; charset=utf-8" (OK)
-      has a matching body (OK)
-  A valid request for all products
-    returns a response which
-      has status code 200 (OK)
-      includes headers
-        "Content-Type" with value "application/json; charset=utf-8" (OK)
-      has a matching body (OK)
-
-
-
-Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1, Duration: < 1 ms - /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll (net5.0)
+Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1, Duration: < 1 ms - Provider.Tests.dll (net6.0)
 ```
 
 Yay - green ✅!
@@ -613,16 +611,16 @@ In `Consumer/tests/ApiTest.cs`:
 public async void NoProductsExist()
 {
     // Arange
-    pact.UponReceiving("A valid request for all products")
-            .Given("no products exist")
-            .WithRequest(HttpMethod.Get, "/api/products")
+    this.pactBuilder.UponReceiving("A valid request for all products")
+        .Given("no products exist")
+        .WithRequest(HttpMethod.Get, "/api/products")
         .WillRespond()
-            .WithStatus(HttpStatusCode.OK)
-            .WithHeader("Content-Type", "application/json; charset=utf-8")
-            .WithJsonBody(new TypeMatcher(new List<object>()));
+        .WithStatus(HttpStatusCode.OK)
+        .WithHeader("Content-Type", "application/json; charset=utf-8")
+        .WithJsonBody(new TypeMatcher(new List<object>()));
 
-    await pact.VerifyAsync(async ctx => {
-        var response = await ApiClient.GetAllProducts();
+    await this.pactBuilder.VerifyAsync(async ctx => {
+        var response = await this.apiClient.GetAllProducts();
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     });
 }
@@ -631,14 +629,14 @@ public async void NoProductsExist()
 public async void ProductDoesNotExist()
 {
     // Arange
-    pact.UponReceiving("A valid request for a product")
-            .Given("product with ID 11 does not exist")
-            .WithRequest(HttpMethod.Get, "/api/products/11")
+    this.pactBuilder.UponReceiving("A valid request for a product")
+        .Given("product with ID 11 does not exist")
+        .WithRequest(HttpMethod.Get, "/api/products/11")
         .WillRespond()
-            .WithStatus(HttpStatusCode.NotFound);
+        .WithStatus(HttpStatusCode.NotFound);
 
-    await pact.VerifyAsync(async ctx => {
-        var response = await ApiClient.GetProduct(11);
+    await this.pactBuilder.VerifyAsync(async ctx => {
+        var response = await this.apiClient.GetProduct(11);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     });
 }
@@ -650,16 +648,16 @@ Notice that our new tests look almost identical to our previous tests, and only 
 $ dotnet test
   Determining projects to restore...
   All projects are up-to-date for restore.
-  consumer -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/src/bin/Debug/netcoreapp3.1/consumer.dll
-  tests -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll
-Test run for /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll (.NETCoreApp,Version=v3.1)
-Microsoft (R) Test Execution Command Line Tool Version 16.11.0
+  Consumer -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\src\bin\Debug\net6.0\Consumer.dll
+  Consumer.Tests -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\tests\bin\Debug\net6.0\Consumer.Tests.dll
+Test run for C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\tests\bin\Debug\net6.0\Consumer.Tests.dll (.NETCoreApp,Version=v6.0)
+Microsoft (R) Test Execution Command Line Tool Version 17.3.1 (x64)
 Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
 
-Passed!  - Failed:     0, Passed:     4, Skipped:     0, Total:     4, Duration: 63 ms - /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll (netcoreapp3.1)
+Passed!  - Failed:     0, Passed:     4, Skipped:     0, Total:     4, Duration: 6 s - Consumer.Tests.dll (net6.0)
 ```
 
 What does our provider have to say about this new test? 
@@ -668,45 +666,49 @@ What does our provider have to say about this new test?
 $ dotnet test
   Determining projects to restore...
   All projects are up-to-date for restore.
-  provider -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/src/bin/Debug/netcoreapp3.1/provider.dll
-  tests -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll
-Test run for /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll (.NETCoreApp,Version=v5.0)
-Microsoft (R) Test Execution Command Line Tool Version 16.11.0
+  Provider -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\src\bin\Debug\net6.0\Provider.dll
+  Provider.Tests -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\bin\Debug\net6.0\Provider.Tests.dll
+Test run for C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\bin\Debug\net6.0\Provider.Tests.dll (.NETCoreApp,Version=v6.0)
+Microsoft (R) Test Execution Command Line Tool Version 17.3.1 (x64)
 Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:03.74]     Provider.Tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer [FAIL]
+  Failed Provider.Tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer [2 s]
+  Error Message:
+   PactNet.Exceptions.PactFailureException : Pact verification failed
+  Stack Trace:
+     at PactNet.Verifier.InteropVerifierProvider.Execute()
+   at PactNet.Verifier.PactVerifierSource.Verify()
+   at Provider.Tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer() in C:\code\elguerre\pact-workshop-dotnet-core-v3\Provider\tests\ProductTest.cs:line 53
+  Standard Output Messages:
+ Starting verification...
+ Pact verification failed
+
+ Verifier Output
+ ---------------
 
 Verifying a pact between ApiClient and ProductService
-  Given no products exist
-  Given product does not exist
-  Given product with ID 10 exists
-fail: Microsoft.AspNetCore.Server.Kestrel[13]
-      Connection id "0HMB3KDP4M8GV", Request id "0HMB3KDP4M8GV:00000002": An unhandled exception was thrown by the application.
-      System.Collections.Generic.KeyNotFoundException: The given key 'no products exist' was not present in the dictionary.
-         at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
-         at tests.Middleware.ProviderStateMiddleware.HandleProviderStatesRequest(HttpContext context) in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/Middleware/ProviderStateMiddleware.cs:line 84
-         at tests.Middleware.ProviderStateMiddleware.Invoke(HttpContext context) in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/Middleware/ProviderStateMiddleware.cs:line 57
-         at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
-fail: Microsoft.AspNetCore.Server.Kestrel[13]
-      Connection id "0HMB3KDP4M8H0", Request id "0HMB3KDP4M8H0:00000002": An unhandled exception was thrown by the application.
-      System.Collections.Generic.KeyNotFoundException: The given key 'product does not exist' was not present in the dictionary.
-         at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
-         at tests.Middleware.ProviderStateMiddleware.HandleProviderStatesRequest(HttpContext context) in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/Middleware/ProviderStateMiddleware.cs:line 84
-         at tests.Middleware.ProviderStateMiddleware.Invoke(HttpContext context) in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/Middleware/ProviderStateMiddleware.cs:line 57
-         at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
-  Given products exist
+
   A valid request for all products
-      Request Failed - One or more of the state change handlers has failed
+     Given no products exist
+      Request Failed - One or more of the setup state change handlers has failed
+
   A valid request for a product
-      Request Failed - One or more of the state change handlers has failed
-  A valid request for a product
+     Given product with ID 10 exists
     returns a response which
       has status code 200 (OK)
       includes headers
         "Content-Type" with value "application/json; charset=utf-8" (OK)
       has a matching body (OK)
+
+  A valid request for a product
+     Given product with ID 11 does not exist
+      Request Failed - One or more of the setup state change handlers has failed
+
   A valid request for all products
+     Given products exist
     returns a response which
       has status code 200 (OK)
       includes headers
@@ -716,59 +718,45 @@ fail: Microsoft.AspNetCore.Server.Kestrel[13]
 
 Failures:
 
-1) Verifying a pact between ApiClient and ProductService Given no products exist - A valid request for all products - One or more of the state change handlers has failed
+1) Verifying a pact between ApiClient and ProductService Given no products exist - A valid request for all products - One or more of the setup state change handlers has failed
 
-2) Verifying a pact between ApiClient and ProductService Given product does not exist - A valid request for a product - One or more of the state change handlers has failed
+2) Verifying a pact between ApiClient and ProductService Given product with ID 11 does not exist - A valid request for a product - One or more of the setup state change handlers has failed
 
 
 There were 2 pact failures
 
-[xUnit.net 00:00:00.93]     tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer [FAIL]
-  Failed tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer [392 ms]
-  Error Message:
-   PactNet.PactFailureException : The verification process failed, see output for errors
-  Stack Trace:
-     at PactNet.Native.NativePactVerifier.Verify(String args) in /Users/erikdanielsen/work/dius/pact-net/src/PactNet.Native/NativePactVerifier.cs:line 34
-   at PactNet.Native.PactVerifier.Verify() in /Users/erikdanielsen/work/dius/pact-net/src/PactNet.Native/PactVerifier.cs:line 240
-   at tests.ProductTest.EnsureProviderApiHonoursPactWithConsumer() in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/ProductTest.cs:line 46
-  Standard Output Messages:
- Invoking the pact verifier with args:
- --file
- /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/pacts/ApiClient-ProductService.json
- --state-change-url
- http://127.0.0.1:9001/provider-states
- --provider-name
- ProductService
- --hostname
- 127.0.0.1
- --port
- 9001
- --filter-consumer
- ApiClient
- --loglevel
- trace
+ Verifier Logs
+ -------------
+ 2022-11-06T09:46:30.813159Z  INFO ThreadId(21) pact_verifier: Running setup provider state change handler 'no products exist' for 'A valid request for all products'
+2022-11-06T09:46:31.975586Z ERROR ThreadId(21) pact_verifier: Provider setup state change for 'no products exist' has failed - MismatchResult::Error("Invalid status code: 500", None)
+2022-11-06T09:46:31.981546Z  INFO ThreadId(21) pact_verifier: Running setup provider state change handler 'product with ID 10 exists' for 'A valid request for a product'
+2022-11-06T09:46:31.986814Z  INFO ThreadId(21) pact_verifier: Running provider verification for 'A valid request for a product'
+2022-11-06T09:46:31.986927Z  INFO ThreadId(21) pact_verifier::provider_client: Sending request to provider at http://127.0.0.1:9001/
+2022-11-06T09:46:31.986935Z  INFO ThreadId(21) pact_verifier::provider_client: Sending request HTTP Request ( method: GET, path: /api/products/10, query: None, headers: None, body: Missing )
+2022-11-06T09:46:32.031649Z  INFO ThreadId(21) pact_verifier::provider_client: Received response: HTTP Response ( status: 200, headers: Some({"content-type": ["application/json; charset=utf-8"], "date": ["Sun", "06 Nov 2022 09:46:31 GMT"], "server": ["Kestrel"], "transfer-encoding": ["chunked"]}), body: Present(87 bytes, application/json;charset=utf-8) )
+2022-11-06T09:46:32.031691Z  INFO ThreadId(21) pact_matching: comparing to expected response: HTTP Response ( status: 200, headers: Some({"Content-Type": ["application/json; charset=utf-8"]}), body: Present(65 bytes) )
+2022-11-06T09:46:32.035410Z  INFO ThreadId(21) pact_verifier: Running setup provider state change handler 'product with ID 11 does not exist' for 'A valid request for a product'
+2022-11-06T09:46:33.178203Z ERROR ThreadId(21) pact_verifier: Provider setup state change for 'product with ID 11 does not exist' has failed - MismatchResult::Error("Invalid status code: 500", None)
+2022-11-06T09:46:33.181265Z  INFO ThreadId(21) pact_verifier: Running setup provider state change handler 'products exist' for 'A valid request for all products'
+2022-11-06T09:46:33.186629Z  INFO ThreadId(21) pact_verifier: Running provider verification for 'A valid request for all products'
+2022-11-06T09:46:33.186658Z  INFO ThreadId(21) pact_verifier::provider_client: Sending request to provider at http://127.0.0.1:9001/
+2022-11-06T09:46:33.186660Z  INFO ThreadId(21) pact_verifier::provider_client: Sending request HTTP Request ( method: GET, path: /api/products, query: None, headers: None, body: Missing )
+2022-11-06T09:46:33.189480Z  INFO ThreadId(21) pact_verifier::provider_client: Received response: HTTP Response ( status: 200, headers: Some({"date": ["Sun", "06 Nov 2022 09:46:32 GMT"], "content-type": ["application/json; charset=utf-8"], "server": ["Kestrel"], "transfer-encoding": ["chunked"]}), body: Present(204 bytes, application/json;charset=utf-8) )
+2022-11-06T09:46:33.189520Z  INFO ThreadId(21) pact_matching: comparing to expected response: HTTP Response ( status: 200, headers: Some({"Content-Type": ["application/json; charset=utf-8"]}), body: Present(130 bytes) )
+2022-11-06T09:46:33.190733Z  WARN ThreadId(21) pact_matching::metrics:
+
+Please note:
+We are tracking events anonymously to gather important usage statistics like Pact version and operating system. To disable tracking, set the 'PACT_DO_NOT_TRACK' environment variable to 'true'.
 
 
-
-Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: < 1 ms - /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/bin/Debug/net5.0/tests.dll (net5.0)
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: < 1 ms - Provider.Tests.dll (net6.0)
 ```
 
 We got two failures related to provider state:
 ```
-fail: Microsoft.AspNetCore.Server.Kestrel[13]
-      Connection id "0HMB3KDP4M8GV", Request id "0HMB3KDP4M8GV:00000002": An unhandled exception was thrown by the application.
-      System.Collections.Generic.KeyNotFoundException: The given key 'no products exist' was not present in the dictionary.
-         at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
-         at tests.Middleware.ProviderStateMiddleware.HandleProviderStatesRequest(HttpContext context) in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/Middleware/ProviderStateMiddleware.cs:line 84
-         at tests.Middleware.ProviderStateMiddleware.Invoke(HttpContext context) in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/Middleware/ProviderStateMiddleware.cs:line 57
-         at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
-fail: Microsoft.AspNetCore.Server.Kestrel[13]
-      Connection id "0HMB3KDP4M8H0", Request id "0HMB3KDP4M8H0:00000002": An unhandled exception was thrown by the application.
-      System.Collections.Generic.KeyNotFoundException: The given key 'product does not exist' was not present in the dictionary.
-         at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
-         at tests.Middleware.ProviderStateMiddleware.HandleProviderStatesRequest(HttpContext context) in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/Middleware/ProviderStateMiddleware.cs:line 84
-         at tests.Middleware.ProviderStateMiddleware.Invoke(HttpContext context) in /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Provider/tests/Middleware/ProviderStateMiddleware.cs:line 57
-         at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
+fail: pact_verifier: Provider setup state change for 'no products exist' has failed - MismatchResult::Error("Invalid status code: 500", None)
+
+fail: Provider setup state change for 'product with ID 11 does not exist' has failed - MismatchResult::Error("Invalid status code: 500", None)
 ```
 
 We can solve this by making sure we handle the missing provider states, which also helps us understand how Provider states work more generally.
@@ -792,12 +780,12 @@ Let's open up our provider Pact verifications in `Provider/tests/Middleware/Prov
 
 ```csharp
 // update the dictionary defined in the constructor
-_providerStates = new Dictionary<string, Action>
+this.ProviderStates = new Dictionary<string, Action>
 {
-    { "products exist", ProductsExist },
-    { "no products exist", NoProductsExist },
-    { "product with ID 11 does not exist", Product11DoesNotExist },
-    { "product with ID 10 exists", Product10Exists }
+  { "products exist", this.ProductsExist },
+  { "product with ID 10 exists", this.Product10Exists },
+  { "no products exist", this.NoProductsExist },
+  { "product with ID 11 does not exist", this.Product11DoesNotExist },
 };
 ```
 
@@ -806,12 +794,12 @@ Also implement handlers for the two new states:
 ```csharp
 private void NoProductsExist()
 {
-    _repository.SetState(new List<Product>());
+    this.repository.SetState(new List<Product>());
 }
 
 private void Product11DoesNotExist()
 {
-    ProductsExist();
+    this.ProductsExist();
 }
 ```
 
@@ -820,20 +808,18 @@ In `NoProductsExist()` we set the current state to an empty list. For `Product11
 Let's see how we go now:
 
 ```console
-erikdanielsen@Erik’s MacBook Pro:~/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests (branch: master!)
-$ dotnet test
   Determining projects to restore...
   All projects are up-to-date for restore.
-  consumer -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/src/bin/Debug/netcoreapp3.1/consumer.dll
-  tests -> /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll
-Test run for /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll (.NETCoreApp,Version=v3.1)
-Microsoft (R) Test Execution Command Line Tool Version 16.11.0
+  Consumer -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\src\bin\Debug\net6.0\Consumer.dll
+  Consumer.Tests -> C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\tests\bin\Debug\net6.0\Consumer.Tests.dll
+Test run for C:\code\elguerre\pact-workshop-dotnet-core-v3\Consumer\tests\bin\Debug\net6.0\Consumer.Tests.dll (.NETCoreApp,Version=v6.0)
+Microsoft (R) Test Execution Command Line Tool Version 17.3.1 (x64)
 Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
 
-Passed!  - Failed:     0, Passed:     4, Skipped:     0, Total:     4, Duration: 61 ms - /Users/erikdanielsen/work/dius/pact-workshop-dotnet-core-v3/Consumer/tests/bin/Debug/netcoreapp3.1/tests.dll (netcoreapp3.1)
+Passed!  - Failed:     0, Passed:     4, Skipped:     0, Total:     4, Duration: 6 s - Consumer.Tests.dll (net6.0)
 ```
 
 _NOTE_: The states are not necessarily a 1 to 1 mapping with the consumer contract tests. You can reuse states amongst different tests. In this scenario we could have used `no products exist` for both tests which would have equally been valid.
@@ -1239,7 +1225,7 @@ namespace provider.Middleware
 }
 ```
 
-Add the middleware in `Startup.cs`, includeing the `using` statement:
+Add the middleware in `Startup.cs`, including the `using` statement:
 
 ```csharp
 using provider.Middleware;

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
-using PactNet;
 using PactNet.Infrastructure.Outputters;
 using PactNet.Verifier;
 using Provider.Tests.XUnitHelpers;
@@ -14,9 +13,7 @@ namespace Provider.Tests
 {
     public class ProductTest
     {
-        private const string pactServiceUri = "http://127.0.0.1:9001";
-
-        private readonly IPactBuilderV3 pactBuilder;
+        private const string PactServiceUri = "http://127.0.0.1:9001";
 
         private ITestOutputHelper OutputHelper { get; }
 
@@ -41,7 +38,7 @@ namespace Provider.Tests
 
             using var webHost = WebHost.CreateDefaultBuilder()
                 .UseStartup<TestStartup>()
-                .UseUrls(pactServiceUri)
+                .UseUrls(PactServiceUri)
                 .Build();
 
             webHost.Start();
@@ -54,9 +51,9 @@ namespace Provider.Tests
                 "ApiClient-ProductService.json"));
 
             pactVerifier
-                .ServiceProvider("ProductService", new Uri(pactServiceUri))
+                .ServiceProvider("ProductService", new Uri(PactServiceUri))
                 .WithFileSource(pactFile)
-                .WithProviderStateUrl(new Uri($"{pactServiceUri}/provider-states"))
+                .WithProviderStateUrl(new Uri($"{PactServiceUri}/provider-states"))
                 .Verify();
         }
     }
