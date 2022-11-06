@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using provider.Model;
 
 namespace provider.Repositories
@@ -10,10 +9,10 @@ namespace provider.Repositories
 
         public ProductRepository()
         {
-            State = new List<Product>()
+            this.State = new List<Product>()
             {
-                new Product(9, "GEM Visa", "CREDIT_CARD", "v2"),
-                new Product(10, "28 Degrees", "CREDIT_CARD", "v1")
+                new(9, "GEM Visa", "CREDIT_CARD", "v2"),
+                new(10, "28 Degrees", "CREDIT_CARD", "v1")
             };
         }
 
@@ -24,12 +23,12 @@ namespace provider.Repositories
 
         List<Product> IProductRepository.List()
         {
-            return State;
+            return this.State;
         }
 
         public Product Get(int id)
         {
-            return State.Find(p => p.id == id);
+            return this.State.Find(p => p.Id == id);
         }
     }
 }

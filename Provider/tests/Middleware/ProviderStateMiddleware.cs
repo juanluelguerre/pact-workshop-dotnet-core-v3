@@ -10,7 +10,7 @@ using Newtonsoft.Json;
 using provider.Model;
 using provider.Repositories;
 
-namespace tests.Middleware
+namespace Provider.Tests.Middleware
 {
     public class ProviderStateMiddleware
     {
@@ -24,7 +24,7 @@ namespace tests.Middleware
             _repository = repository;
             _providerStates = new Dictionary<string, Action>
             {
-                { "products exist", ProductsExist},
+                { "products exist", ProductsExist },
                 { "product with ID 10 exists", Product10Exists }
             };
         }

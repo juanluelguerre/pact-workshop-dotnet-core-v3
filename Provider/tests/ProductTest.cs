@@ -5,21 +5,24 @@ using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using PactNet;
 using PactNet.Infrastructure.Outputters;
-using PactNet.Native;
-using tests.XUnitHelpers;
+using PactNet.Verifier;
+using Provider.Tests.XUnitHelpers;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace tests
+namespace Provider.Tests
 {
     public class ProductTest
     {
-        private string _pactServiceUri = "http://127.0.0.1:9001";
-        private ITestOutputHelper _outputHelper { get; }
+        private const string pactServiceUri = "http://127.0.0.1:9001";
+
+        private readonly IPactBuilderV3 pactBuilder;
+
+        private ITestOutputHelper OutputHelper { get; }
 
         public ProductTest(ITestOutputHelper output)
         {
-            _outputHelper = output;
+            this.OutputHelper = output;
         }
 
         [Fact]
@@ -32,23 +35,30 @@ namespace tests
                 // so a custom outputter is required.
                 Outputters = new List<IOutput>
                 {
-                    new XUnitOutput(_outputHelper)
+                    new XUnitOutput(this.OutputHelper)
                 }
             };
 
-            using (var _webHost = WebHost.CreateDefaultBuilder().UseStartup<TestStartup>().UseUrls(_pactServiceUri).Build())
-            {
-                _webHost.Start();
+            using var webHost = WebHost.CreateDefaultBuilder()
+                .UseStartup<TestStartup>()
+                .UseUrls(pactServiceUri)
+                .Build();
 
-                //Act / Assert
-                IPactVerifier pactVerifier = new PactVerifier(config);
-                var pactFile = new FileInfo(Path.Join("..", "..", "..", "..", "..", "pacts", "ApiClient-ProductService.json"));
-                pactVerifier.FromPactFile(pactFile)
-                    .WithProviderStateUrl(new Uri($"{_pactServiceUri}/provider-states"))
-                    .ServiceProvider("ProductService", new Uri(_pactServiceUri))
-                    .HonoursPactWith("ApiClient")
-                    .Verify();
-            }
+            webHost.Start();
+
+
+            //Act / Assert
+            IPactVerifier pactVerifier = new PactVerifier(config);
+
+            var pactFile = new FileInfo(Path.Join("..", "..", "..", "..", "..", "pacts",
+                "ApiClient-ProductService.json"));
+
+            pactVerifier
+                .ServiceProvider("ProductService", new Uri(pactServiceUri))
+                .WithFileSource(pactFile)
+                .WithProviderStateUrl(new Uri($"{pactServiceUri}/provider-states"))
+                // .HonoursPactWith("ApiClient")
+                .Verify();
         }
     }
 }

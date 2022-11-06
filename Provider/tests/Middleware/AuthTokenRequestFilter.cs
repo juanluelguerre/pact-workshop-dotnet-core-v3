@@ -1,5 +1,6 @@
 ﻿using System;
-namespace tests.Middleware
+
+namespace Provider.Tests.Middleware
 {
     public class RequestFilters
     {

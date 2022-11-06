@@ -1,37 +1,36 @@
-using System.IO;
-using PactNet;
-using PactNet.Native;
-using Xunit.Abstractions;
-using Xunit;
-using System.Net.Http;
-using System.Net;
 using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Net.Http;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
-using Consumer;
+using PactNet;
 using PactNet.Matchers;
+using Xunit;
+using Xunit.Abstractions;
 
-namespace tests
+namespace Consumer.Tests
 {
     public class ApiTest
     {
-        private IPactBuilderV3 pact;
-        private readonly ApiClient ApiClient;
-        private readonly int port = 9000;
+        private const int port = 9000;
+
+        private readonly IPactBuilderV3 pactBuilder;
+        private readonly ApiClient apiClient;
         private readonly List<object> products;
 
         public ApiTest(ITestOutputHelper output)
         {
-            products = new List<object>()
+            this.products = new List<object>()
             {
                 new { id = 9, type = "CREDIT_CARD", name = "GEM Visa", version = "v2" },
                 new { id = 10, type = "CREDIT_CARD", name = "28 Degrees", version = "v1" }
             };
 
-            var Config = new PactConfig
+            var config = new PactConfig
             {
                 PactDir = Path.Join("..", "..", "..", "..", "..", "pacts"),
-                LogDir = "pact_logs",
+                //LogDir = "pact_logs",
                 Outputters = new[] { new XUnitOutput(output) },
                 DefaultJsonSettings = new JsonSerializerSettings
                 {
@@ -39,24 +38,28 @@ namespace tests
                 }
             };
 
-            pact = Pact.V3("ApiClient", "ProductService", Config).UsingNativeBackend(port);
-            ApiClient = new ApiClient(new System.Uri($"http://localhost:{port}"));
+            var pact = Pact.V3("ApiClient", "ProductService", config);
+
+            this.pactBuilder = pact.WithHttpInteractions(port);
+
+            this.apiClient = new ApiClient(new System.Uri($"http://localhost:{port}"));
         }
 
         [Fact]
         public async void GetAllProducts()
         {
             // Arange
-            pact.UponReceiving("A valid request for all products")
-                    .Given("products exist")
-                    .WithRequest(HttpMethod.Get, "/api/products")
+            this.pactBuilder.UponReceiving("A valid request for all products")
+                .Given("products exist")
+                .WithRequest(HttpMethod.Get, "/api/products")
                 .WillRespond()
-                    .WithStatus(HttpStatusCode.OK)
-                    .WithHeader("Content-Type", "application/json; charset=utf-8")
-                    .WithJsonBody(new TypeMatcher(products));
+                .WithStatus(HttpStatusCode.OK)
+                .WithHeader("Content-Type", "application/json; charset=utf-8")
+                .WithJsonBody(new TypeMatcher(this.products));
 
-            await pact.VerifyAsync(async ctx => {
-                var response = await ApiClient.GetAllProducts();
+            await this.pactBuilder.VerifyAsync(async ctx =>
+            {
+                var response = await this.apiClient.GetAllProducts();
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             });
         }
@@ -65,16 +68,17 @@ namespace tests
         public async void GetProduct()
         {
             // Arange
-            pact.UponReceiving("A valid request for a product")
-                    .Given("product with ID 10 exists")
-                    .WithRequest(HttpMethod.Get, "/api/product/10")
+            this.pactBuilder.UponReceiving("A valid request for a product")
+                .Given("product with ID 10 exists")
+                .WithRequest(HttpMethod.Get, "/api/products/10")
                 .WillRespond()
-                    .WithStatus(HttpStatusCode.OK)
-                    .WithHeader("Content-Type", "application/json; charset=utf-8")
-                    .WithJsonBody(new TypeMatcher(products[1]));
+                .WithStatus(HttpStatusCode.OK)
+                .WithHeader("Content-Type", "application/json; charset=utf-8")
+                .WithJsonBody(new TypeMatcher(this.products[1]));
 
-            await pact.VerifyAsync(async ctx => {
-                var response = await ApiClient.GetProduct(10);
+            await this.pactBuilder.VerifyAsync(async ctx =>
+            {
+                var response = await this.apiClient.GetProduct(10);
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             });
         }

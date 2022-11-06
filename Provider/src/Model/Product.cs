@@ -1,19 +1,20 @@
 ﻿using System;
+
 namespace provider.Model
 {
     public class Product
     {
-        public int id { get; set; }
-        public string name { get; set; }
-        public string type { get; set; }
-        public string version { get; set; }
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Type { get; set; }
+        public string Version { get; set; }
 
         public Product(int id, string name, string type, string version)
         {
-            this.id = id;
-            this.name = name;
-            this.type = type;
-            this.version = version;
+            this.Id = id;
+            this.Name = name;
+            this.Type = type;
+            this.Version = version;
         }
     }
 }

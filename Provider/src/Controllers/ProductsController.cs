@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using provider.Model;
 using provider.Repositories;
@@ -9,18 +8,18 @@ namespace Provider.Controllers
     [Route("api/[controller]")]
     public class ProductsController : Controller
     {
-        private readonly IProductRepository Repository;
+        private readonly IProductRepository repository;
 
         public ProductsController(IProductRepository productRepository)
         {
-            this.Repository = productRepository;
+            this.repository = productRepository;
         }
 
         // GET /api/products
         [HttpGet]
         public ActionResult<IEnumerable<Product>> GetProducts()
         {
-            List<Product> products = Repository.List();
+            var products = this.repository.List();
             return products;
         }
 
@@ -28,7 +27,7 @@ namespace Provider.Controllers
         [HttpGet("{id}")]
         public ActionResult<Product> GetProduct(int id)
         {
-            var product = Repository.Get(id);
+            var product = this.repository.Get(id);
 
             if (product == null)
             {

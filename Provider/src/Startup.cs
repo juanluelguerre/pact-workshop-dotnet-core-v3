@@ -11,7 +11,7 @@ namespace Provider
     {
         public Startup(IConfiguration configuration)
         {
-            Configuration = configuration;
+            this.Configuration = configuration;
         }
 
         public IConfiguration Configuration { get; }
@@ -21,7 +21,7 @@ namespace Provider
         {
             services.AddSingleton<IProductRepository, ProductRepository>();
             services.AddControllers()
-                        .AddJsonOptions(options => options.JsonSerializerOptions.WriteIndented = true);
+                .AddJsonOptions(options => options.JsonSerializerOptions.WriteIndented = true);
             services.AddMvc();
         }
 
@@ -32,6 +32,7 @@ namespace Provider
             {
                 app.UseDeveloperExceptionPage();
             }
+
             app.UseRouting();
             app.UseEndpoints(e => e.MapControllers());
         }

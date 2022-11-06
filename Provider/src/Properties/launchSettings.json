@@ -1,9 +1,10 @@
 {
   "profiles": {
-    "provider": {
+    "Provider": {
       "commandName": "Project",
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:18460",
+      "launchUrl": "api/products",
+      "applicationUrl": "http://localhost:9001",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
@@ -12,10 +13,10 @@
       "commandName": "Project",
       "launchBrowser": true,
       "launchUrl": "api/healthcheck",
-      "applicationUrl": "http://localhost:5000/",
+      "applicationUrl": "http://localhost:9001/",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "ASPNETCORE_URLS": "http://localhost:9000/",
+        "ASPNETCORE_URLS": "http://localhost:900/",
         "PACT_PROVIDER_SHOULD_THROW_404": "false"
       }
     }
